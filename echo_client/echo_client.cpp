@@ -9,7 +9,7 @@
 #include <thread>
 
 using namespace std;
-#define BUFSIZE 1024
+#define BUF_SIZE 1024
 
 void usage() {
     printf("syntax: echo_client <host> <port>\n");
@@ -34,7 +34,7 @@ void recv_echo(int sockfd, char * buf){
 	while(true){
 		memset(buf, '\0', sizeof(buf));
 
-		ssize_t received = recv(sockfd, buf, BUFSIZE - 1, 0);
+		ssize_t received = recv(sockfd, buf, BUF_SIZE - 1, 0);
 		if (received == 0 || received == -1) {
 			perror("recv failed");
 			break;
@@ -75,8 +75,8 @@ int main(int argc, char * argv[])
 	}
 	printf("connected\n");
 
-	char send_buf[BUFSIZE];
-	char recv_buf[BUFSIZE];
+	char send_buf[BUF_SIZE];
+	char recv_buf[BUF_SIZE];
 
 	thread send_thr = thread(send_echo, sockfd, send_buf);
 	thread recv_thr = thread(recv_echo, sockfd, recv_buf);
