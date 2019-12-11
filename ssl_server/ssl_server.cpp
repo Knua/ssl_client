@@ -17,7 +17,7 @@
 #include <thread> // for thread
 #include <mutex> // for lock
 
-#define BUFSIZE 1000
+#define BUF_SIZE 1000
 #define FAIL    -1
 
 using namespace std;
@@ -28,7 +28,7 @@ void usage() {
     printf("sample: ssl_server 1234 -b\n");
 }
 mutex m;
-list<SSL> client_childfd;
+list<SSL*> client_childfd;
 
 // Create the SSL socket and intialize the socket address structure
 int OpenListener(int port)
@@ -69,7 +69,7 @@ SSL_CTX* InitServerCTX(void)
     SSL_CTX *ctx;
     OpenSSL_add_all_algorithms();  /* load & register all cryptos, etc. */
     SSL_load_error_strings();   /* load all error messages */
-    method = TLSv1_2_server_method();  /* create new server-method instance */
+    method = (SSL_METHOD *) TLSv1_2_server_method();  /* create new server-method instance */
     ctx = SSL_CTX_new(method);   /* create new context from method */
     if ( ctx == NULL )
     {
@@ -120,7 +120,6 @@ void ShowCerts(SSL* ssl)
 }
 void Servlet(SSL* ssl) /* Serve the connection -- threadable */
 {
-    char buf[BUF_SIZE] = {0};
     int sd, bytes;
 
     if ( SSL_accept(ssl) == FAIL )     /* do SSL-protocol accept */
@@ -128,12 +127,11 @@ void Servlet(SSL* ssl) /* Serve the connection -- threadable */
     else
     {
         while (true) {
-            if(find(client_childfd.begin(), client_childfd.end(), &ssl) == client_childfd.end()) break;
+            if(find(client_childfd.begin(), client_childfd.end(), ssl) == client_childfd.end()) break;
 
             char buf[BUF_SIZE] = {0};
-            int sd, bytes;
             ShowCerts(ssl);        /* get any certificates */
-            bytes = SSL_read(ssl, buf, sizeof(buf)); /* get request */
+            bytes = SSL_read(ssl, buf, BUF_SIZE - 1); /* get request */
             if (bytes <= 0) {
                 ERR_print_errors_fp(stderr);
                 break;
@@ -143,7 +141,6 @@ void Servlet(SSL* ssl) /* Serve the connection -- threadable */
 
             if(b_opt_check){
                 m.lock();
-                bool error_chk = false;
                 for(auto it = client_childfd.begin(); it != client_childfd.end(); it++){
                     if(SSL_write(*it, buf, strlen(buf)) == 0){
                         client_childfd.erase(it);
@@ -159,7 +156,7 @@ void Servlet(SSL* ssl) /* Serve the connection -- threadable */
         }
     }
 	m.lock();
-	client_childfd.erase(find(client_childfd.begin(), client_childfd.end(), &ssl));
+	client_childfd.erase(find(client_childfd.begin(), client_childfd.end(), ssl));
 
     sd = SSL_get_fd(ssl);       /* get socket connection */
     SSL_free(ssl);         /* release SSL state */
@@ -194,7 +191,7 @@ int main(int count, char * Argc[])
     SSL_library_init();
     portnum = Argc[1];
     ctx = InitServerCTX();        /* initialize SSL */
-    LoadCertificates(ctx, "test.com.crt", "test.com.key"); /* load certs */
+    LoadCertificates(ctx, "test.com.pem", "test.com.pem"); /* load certs */
     server = OpenListener(atoi(portnum));    /* create server socket */
     while (1)
     {
@@ -210,7 +207,7 @@ int main(int count, char * Argc[])
         SSL_set_fd(ssl, client);      /* set connection socket to SSL state */
 
 		m.lock();
-		client_childfd.push_back(*ssl);
+		client_childfd.push_back(ssl);
 		m.unlock();
 
         printf("Connection - %s:%d\n",inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
