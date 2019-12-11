@@ -1,4 +1,3 @@
-
 #include <errno.h>
 #include <malloc.h>
 #include <string.h>
@@ -27,7 +26,7 @@ void usage() {
 
 void send_echo(SSL * ssl, char * buf){
 	while(true){
-		memset(buf, '\0', sizeof(buf));
+		memset(buf, '\0', BUF_SIZE);
 
 		scanf("%s", buf);
 		if (strcmp(buf, "quit") == 0) break;
@@ -41,7 +40,7 @@ void send_echo(SSL * ssl, char * buf){
 }
 void recv_echo(SSL * ssl, char * buf){
 	while(true){
-		memset(buf, '\0', sizeof(buf));
+        memset(buf, '\0', BUF_SIZE);
 
 		ssize_t received = SSL_read(ssl, buf, BUF_SIZE - 1);
 		if (received <= 0) {
@@ -82,7 +81,7 @@ SSL_CTX* InitCTX(void)
     SSL_CTX *ctx;
     OpenSSL_add_all_algorithms();  /* Load cryptos, et.al. */
     SSL_load_error_strings();   /* Bring in and register error messages */
-    method = TLSv1_2_client_method();  /* Create new client-method instance */
+    method = (SSL_METHOD*)TLSv1_2_client_method();  /* Create new client-method instance */
     ctx = SSL_CTX_new(method);   /* Create new context */
     if ( ctx == NULL )
     {
@@ -100,24 +99,20 @@ void ShowCerts(SSL* ssl)
     {
         printf("Server certificates:\n");
         line = X509_NAME_oneline(X509_get_subject_name(cert), 0, 0);
-        printf("Subject: %s\n", line);
+        printf("\tSubject: %s\n", line);
         free(line);       /* free the malloc'ed string */
         line = X509_NAME_oneline(X509_get_issuer_name(cert), 0, 0);
-        printf("Issuer: %s\n", line);
+        printf("\tIssuer: %s\n\n", line);
         free(line);       /* free the malloc'ed string */
         X509_free(cert);     /* free the malloc'ed certificate copy */
     }
-    else
-        printf("Info: No client certificates configured.\n");
+    // else printf("Info: No client certificates configured.\n");
 }
 int main(int argc, char * strings[])
 {
     SSL_CTX *ctx;
     int server;
     SSL *ssl;
-    char buf[BUF_SIZE];
-    char acClientRequest[BUF_SIZE] = {0};
-    int bytes;
     char *hostname, *portnum;
     
     if (argc != 3){
@@ -135,16 +130,19 @@ int main(int argc, char * strings[])
 
     if ( SSL_connect(ssl) == FAIL )   /* perform the connection */
         ERR_print_errors_fp(stderr);
-    else
-    {
-        printf("\n\nConnected with %s encryption\n", SSL_get_cipher(ssl));
+    else{
+        printf("Connected with %s encryption\n\n", SSL_get_cipher(ssl));
         ShowCerts(ssl);        /* get any certs */
 
-        char send_buf[BUF_SIZE];
-	    char recv_buf[BUF_SIZE];
 
-	    thread send_thr = thread(send_echo, ssl, send_buf);
-	    thread recv_thr = thread(recv_echo, ssl, recv_buf);
+	    char send_buf[BUF_SIZE];
+        char recv_buf[BUF_SIZE];
+
+        thread send_thr = thread(send_echo, ssl, send_buf);
+        thread recv_thr = thread(recv_echo, ssl, recv_buf);
+
+        send_thr.join();
+        recv_thr.join();
 
         SSL_free(ssl);        /* release connection state */
     }
