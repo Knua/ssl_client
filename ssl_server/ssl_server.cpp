@@ -115,8 +115,7 @@ void ShowCerts(SSL* ssl)
         free(line);
         X509_free(cert);
     }
-    else
-        printf("No certificates.\n");
+    // else printf("No certificates.\n");
 }
 void Servlet(SSL* ssl) /* Serve the connection -- threadable */
 {
@@ -124,8 +123,7 @@ void Servlet(SSL* ssl) /* Serve the connection -- threadable */
 
     if ( SSL_accept(ssl) == FAIL )     /* do SSL-protocol accept */
         ERR_print_errors_fp(stderr);
-    else
-    {
+    else{
         while (true) {
             if(find(client_childfd.begin(), client_childfd.end(), ssl) == client_childfd.end()) break;
 
@@ -148,30 +146,30 @@ void Servlet(SSL* ssl) /* Serve the connection -- threadable */
                 }
                 m.unlock();
             }
-            else if (SSL_write(ssl, buf, strlen(buf)) <= 0) {
-                printf("send failed\n");
-			    break;
+            else {
+                if (SSL_write(ssl, buf, strlen(buf)) <= 0) {
+                    printf("send failed\n");
+			        break;
+                }
             }
-            else {}
         }
     }
 	m.lock();
 	client_childfd.erase(find(client_childfd.begin(), client_childfd.end(), ssl));
+    m.unlock();
 
     sd = SSL_get_fd(ssl);       /* get socket connection */
     SSL_free(ssl);         /* release SSL state */
     close(sd);          /* close connection */
-    m.unlock();
 }
 
 int main(int count, char * Argc[])
 {
     SSL_CTX *ctx;
-    int server;
     char *portnum;
-//Only root user have the permsion to run the server
-    if(!isRoot())
-    {
+
+    //Only root user have the permsion to run the server
+    if(!isRoot()){
         printf("This program must be run as root/sudo user!!");
         exit(0);
     }
@@ -192,12 +190,12 @@ int main(int count, char * Argc[])
     portnum = Argc[1];
     ctx = InitServerCTX();        /* initialize SSL */
     LoadCertificates(ctx, "test.com.pem", "test.com.pem"); /* load certs */
-    server = OpenListener(atoi(portnum));    /* create server socket */
+    int server = OpenListener(atoi(portnum));    /* create server socket */
     while (1)
     {
         struct sockaddr_in addr;
         socklen_t len = sizeof(addr);
-        SSL *ssl;
+        SSL * ssl;
         int client = accept(server, (struct sockaddr*)&addr, &len);  /* accept connection as usual */
         if (client < 0) {
 			printf("ERROR on accept");
@@ -209,10 +207,11 @@ int main(int count, char * Argc[])
 		m.lock();
 		client_childfd.push_back(ssl);
 		m.unlock();
-
         printf("Connection - %s:%d\n",inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+
         thread(Servlet, ssl).detach();         /* service connection */
     }
     close(server);          /* close server socket */
     SSL_CTX_free(ctx);         /* release context */
 }
+
